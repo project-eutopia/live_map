@@ -1,3 +1,98 @@
+class @LinkedList
+  constructor: ->
+    @head = null
+    @tail = null
+  
+  add: (obj) ->
+    new_node = new Node(obj, @tail, null)
+    if (@tail == null and @head == null)
+      @tail = new_node
+      @head = new_node
+    else
+      @tail.next = new_node
+      @tail = new_node
+    return new_node
+  
+  remove: (node) ->
+    cur_node = @head
+    while (cur_node isnt null)
+      if (node == cur_node)
+        # Found, now remove
+        if(node == @head and node == @tail)
+          @head = null
+          @tail = null
+        else if(node == @head)
+          @head = cur_node.next
+          if(@head.next isnt null)
+            @head.next.prev = @head
+        else if(node == @tail)
+          @tail = cur_node.prev
+          if(@tail.prev isnt null)
+            @tail.prev.next = @tail
+        else
+          cur_node.prev.next = cur_node.next
+          cur_node.next.prev = cur_node.prev
+        return cur_node
+      
+      cur_node = cur_node.next
+    return null
+  
+  size: ->
+    count = 0
+    cur_node = @head
+    while(cur_node isnt null)
+      count = count + 1
+      cur_node = cur_node.next
+    return count
+
+class @Node
+  constructor: (obj, prev, next) ->
+    @obj = obj
+    @prev = prev
+    @next = next
+  
+  has_next: ->
+    return (@next == null) ? false : true
+  
+  has_prev: ->
+    return (@prev == null) ? false : true
+
+# list = new @LinkedList
+# a = list.add("A")
+# node = list.add("B")
+# c = list.add("C")
+# 
+# console.log(node.obj is "B")
+# console.log(node.prev.obj is "A")
+# console.log(node.next.obj is "C")
+# 
+# console.log(list.remove(node).obj is "B")
+# 
+# console.log(list.head.obj is "A")
+# console.log(list.tail.obj is "C")
+# cur_node = list.head
+# while(cur_node isnt null)
+#   console.log(cur_node.obj)
+#   cur_node = cur_node.next
+# 
+# console.log(list.remove(a).obj is "A")
+# 
+# console.log(list.head.obj is "C")
+# console.log(list.tail.obj is "C")
+# cur_node = list.head
+# while(cur_node isnt null)
+#   console.log(cur_node.obj)
+#   cur_node = cur_node.next
+# 
+# console.log(list.remove(c).obj is "C")
+# 
+# console.log(list.head.obj)
+# console.log(list.tail.obj)
+# cur_node = list.head
+# while(cur_node isnt null)
+#   console.log(cur_node.obj)
+#   cur_node = cur_node.next
+
 # This class simply handles calling an update function at a certain frames-per-second
 # rate.  The class passed into the start_loop() function must have an update() function
 class @LiveLoop
@@ -40,7 +135,7 @@ class @LiveLoop
 # check
 class @LiveMapBox
   constructor: ->
-    @markers = []
+    @markers = new LinkedList
     @map = null
     @live_loop = new LiveLoop(24)
     @databaseCheckInterval = null
@@ -69,13 +164,16 @@ class @LiveMapBox
   
   add_marker: (lat, lng, radius) ->
     if @map != null
-      @markers.push new Marker(lat, lng, radius, @map)
+      @markers.add(new Marker(lat, lng, radius, @map))
     
   update: ->
-    for marker in @markers
-      marker.update()
-      #if mmarker.update() == true
-        # remove
+    # Check that we are really removing markers
+    #console.log(@markers.size())
+    marker = @markers.head
+    while marker isnt null
+      if marker.obj.update() == true
+        @markers.remove(marker)
+      marker = marker.next
   
   database_get_new: ->
 
@@ -134,7 +232,7 @@ class @Marker
         scale: 20
       )
       
-      if @googleMarker.fillOpacity == 0 and @googleMarker.strokeOpacity == 0
+      if @googleMarker.icon.fillOpacity == 0 and @googleMarker.icon.strokeOpacity == 0
         @active = false
         return true
       else
@@ -146,3 +244,6 @@ class @Marker
 #
 @box = new @LiveMapBox
 @box.loadMap("map-canvas")
+
+
+
