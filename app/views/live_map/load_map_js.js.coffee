@@ -40,9 +40,9 @@ class @LiveLoop
 # check
 class @LiveMapBox
   constructor: ->
-    @circles = []
+    @markers = []
     @map = null
-    @live_loop = new LiveLoop(30)
+    @live_loop = new LiveLoop(24)
     @databaseCheckInterval = null
     @last_query_time = null
     
@@ -67,14 +67,14 @@ class @LiveMapBox
     @databaseCheckInterval = setInterval(callback, 1000*<%= @db_check_delay %>)
 
   
-  add_circle: (lat, lng, radius) ->
+  add_marker: (lat, lng, radius) ->
     if @map != null
-      @circles.push new Circle(lat, lng, radius, @map)
+      @markers.push new Marker(lat, lng, radius, @map)
     
   update: ->
-    for circle in @circles
-      circle.update()
-      #if circle.update() == true
+    for marker in @markers
+      marker.update()
+      #if mmarker.update() == true
         # remove
   
   database_get_new: ->
@@ -94,14 +94,14 @@ class @LiveMapBox
     @process_new_json(json)
     
   process_new_json: (json) ->
-    for circle in json
-      callback = @add_circle.bind(@, circle.lat, circle.lng, circle.radius)
-      setTimeout callback, circle.delay*1000
+    for marker in json
+      callback = @add_marker.bind(@, marker.lat, marker.lng, marker.radius)
+      setTimeout callback, marker.delay*1000
     
   start_loop: ->
     @live_loop.start_loop(this)
 
-class @Circle
+class @Marker
   @initFillOpacity = 0.35
   @fillOpacityDecr = 0.005
   @initStrokeOpacity = 0.8
@@ -109,25 +109,32 @@ class @Circle
   
   constructor: (lat, lng, radius, map) ->
     @active = true
-    @googleCircle = new google.maps.Circle(
-      strokeColor: '#FF0000'
-      strokeOpacity: Circle.initStrokeOpacity
-      strokeWeight: 2
-      fillColor: '#FF0000'
-      fillOpacity: Circle.initFillOpacity
+    @googleMarker = new google.maps.Marker(
+      position: new google.maps.LatLng(lat, lng)
       map: map
-      center: new google.maps.LatLng(lat, lng)
-      radius: radius
+      icon:
+        path: google.maps.SymbolPath.CIRCLE
+        strokeColor: '#FF0000'
+        strokeOpacity: Marker.initStrokeOpacity
+        strokeWeight: 2
+        fillColor: '#FF0000'
+        fillOpacity: Marker.initFillOpacity
+        scale: 20
     )
   
   update: ->
     if @active == true
-      @googleCircle.setOptions(
-        strokeOpacity: Math.max(@googleCircle.strokeOpacity - Circle.strokeOpacityDecr, 0)
-        fillOpacity: Math.max(@googleCircle.fillOpacity - Circle.fillOpacityDecr, 0)
+      @googleMarker.setIcon(
+        path: google.maps.SymbolPath.CIRCLE
+        strokeColor: '#FF0000'
+        strokeOpacity: Math.max(@googleMarker.icon.strokeOpacity - Marker.strokeOpacityDecr, 0)
+        strokeWeight: 2
+        fillColor: '#FF0000'
+        fillOpacity: Math.max(@googleMarker.icon.fillOpacity - Marker.fillOpacityDecr, 0)
+        scale: 20
       )
       
-      if @googleCircle.fillOpacity == 0 and @googleCircle.strokeOpacity == 0
+      if @googleMarker.fillOpacity == 0 and @googleMarker.strokeOpacity == 0
         @active = false
         return true
       else
