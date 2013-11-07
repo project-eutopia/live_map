@@ -1,12 +1,22 @@
-<h1>LiveMap#index</h1>
+<h1>Live Map</h1>
 
 <div style='width: 1060px;'>
   <div id="map-canvas" style='width: 1060px; height: 520px;'></div>
 </div>
 
-<p>Find me in app/views/live_map/index.html.erb</p>
+<label for="store_list">Store</label>
+<select id="store_list">
+  <option value="">All</option>
+  <option value="0">Red</option>
+  <option value="1">Yellow</option>  
+  <option value="2">Green</option>
+  <option value="3">Blue</option>
+  <option value="4">Purple</option>
+</select>
 
 
+
+<div id="dyn"></div>
 
 <footer>
   <script src="//maps.google.com/maps/api/js?v=3.13&amp;sensor=false&amp;libraries=geometry" type="text/javascript"></script>

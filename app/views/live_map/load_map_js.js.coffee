@@ -1,3 +1,4 @@
+
 class @LinkedList
   constructor: ->
     @head = null
@@ -103,6 +104,11 @@ class @LiveLoop
     
     @obj_to_update = null
     @interval = null
+    
+    @count = 0
+    
+    @last_time = 0
+    @time_overshoot = 0
   
   is_running: ->
     if @interval != null
@@ -117,8 +123,26 @@ class @LiveLoop
       @interval = null
 
   update: ->
-    if @interval != null
+    if @timeout != null
+      now_time = Date.now()
+      diff = now_time - @last_time
+      @time_overshoot = @overshoot + diff
+      
+      # If overshot, update to bring the overshoot time down
+      while @time_overshoot > @ms_per_frame
+        @obj_to_update.update()
+        @count = @count + 1
+        @time_overshoot - @ms_per_frame
+      
       @obj_to_update.update()
+      @obj_to_update.render()
+      @count = @count + 1
+      document.getElementById("dyn").innerHTML = "<p>Ticks = "+@count+"</p><p>Num markers = "+@obj_to_update.markers.size()+"</p>"
+      
+      callback = @update.bind @
+      @timeout = setTimeout callback, @ms_per_frame
+      @last_time = Date.now()
+
       
   start_loop: (obj_to_update) ->
     # Stop, in the event a loop already running
@@ -126,7 +150,9 @@ class @LiveLoop
     
     @obj_to_update = obj_to_update
     callback = @update.bind @
-    @interval = setInterval callback, @ms_per_frame
+    @timeout = setTimeout callback, @ms_per_frame
+    @last_time = Date.now()
+    @time_overshoot = 0
     
     
 
@@ -137,9 +163,22 @@ class @LiveMapBox
   constructor: ->
     @markers = new LinkedList
     @map = null
-    @live_loop = new LiveLoop(24)
+    @live_loop = new LiveLoop(15)
     @databaseCheckInterval = null
     @last_query_time = null
+    @store = null
+  
+  store_select: (store) ->
+    @store = store
+
+    marker_node = @markers.head
+    while marker_node isnt null
+      # If a store filter is selected, set markers failing this filter to be not visible
+      if store != "" and store != marker_node.obj.store.toString()
+        marker_node.obj.googleMarker.setVisible(false)
+      else
+        marker_node.obj.googleMarker.setVisible(true)
+      marker_node = marker_node.next
     
   loadMap: (divId) ->
 
@@ -162,18 +201,29 @@ class @LiveMapBox
     @databaseCheckInterval = setInterval(callback, 1000*<%= @db_check_delay %>)
 
   
-  add_marker: (lat, lng, radius) ->
+  add_marker: (lat, lng, radius, store, color) ->
     if @map != null
-      @markers.add(new Marker(lat, lng, radius, @map))
+      marker = new Marker(lat, lng, radius, store, color, @map)
+      if @store != "" and @store != null and @store != store.toString()
+        marker.googleMarker.setVisible(false)
+      @markers.add(marker)
     
   update: ->
-    # Check that we are really removing markers
-    #console.log(@markers.size())
-    marker = @markers.head
-    while marker isnt null
-      if marker.obj.update() == true
-        @markers.remove(marker)
-      marker = marker.next
+    #console.log(@markers.size()) # Check that we are really removing markers
+    marker_node = @markers.head
+    while marker_node isnt null
+      if marker_node.obj.update() == true
+        # Set the map to NULL and remove from our LinkedList to ensure this
+        # finished marker will be garbage collected
+        marker_node.obj.googleMarker.setMap(null)
+        @markers.remove(marker_node)
+      marker_node = marker_node.next
+  
+  render: ->
+    marker_node = @markers.head
+    while marker_node isnt null
+      marker_node.obj.render()
+      marker_node = marker_node.next
   
   database_get_new: ->
 
@@ -181,11 +231,11 @@ class @LiveMapBox
       type: "POST"
       data:
         last_query: @last_query_time
-    
       #success: ->
       #  alert
-      #error: ->
-      #  alert
+      error: ->
+        # This AJAX call... we should have validation of user to be able to call
+        alert("Error calling /live_map/database_get_new")
   
   refresh: (query_time, json) ->
     @last_query_time = query_time
@@ -193,57 +243,68 @@ class @LiveMapBox
     
   process_new_json: (json) ->
     for marker in json
-      callback = @add_marker.bind(@, marker.lat, marker.lng, marker.radius)
+      callback = @add_marker.bind(@, marker.lat, marker.lng, marker.radius, marker.store, marker.color)
       setTimeout callback, marker.delay*1000
     
   start_loop: ->
     @live_loop.start_loop(this)
 
 class @Marker
-  @initFillOpacity = 0.35
-  @fillOpacityDecr = 0.005
-  @initStrokeOpacity = 0.8
-  @strokeOpacityDecr = 0.01
+  @initFillOpacity = 0.40
+  @initStrokeOpacity = 0.85
+  @lifetime_ticks_default = 30
   
-  constructor: (lat, lng, radius, map) ->
+  constructor: (lat, lng, radius, store, color, map) ->
+    @ticks = 0
+    @lifetime = Marker.lifetime_ticks_default
     @active = true
+    @radius = radius
+    @store = store
+    @color = color
     @googleMarker = new google.maps.Marker(
       position: new google.maps.LatLng(lat, lng)
       map: map
       icon:
         path: google.maps.SymbolPath.CIRCLE
-        strokeColor: '#FF0000'
-        strokeOpacity: Marker.initStrokeOpacity
         strokeWeight: 2
-        fillColor: '#FF0000'
+        strokeColor: @color
+        strokeOpacity: Marker.initStrokeOpacity
+        fillColor: @color
         fillOpacity: Marker.initFillOpacity
-        scale: 20
+        scale: @radius
     )
-  
+    
   update: ->
+    @ticks = @ticks + 1
+    if @ticks >= @lifetime
+      @active = false
+      return true
+    else
+      return false
+  
+  render: ->
     if @active == true
+      # Note, it looks nicer when the lighter fill color completely fades out first,
+      # before the circle outline does
       @googleMarker.setIcon(
         path: google.maps.SymbolPath.CIRCLE
-        strokeColor: '#FF0000'
-        strokeOpacity: Math.max(@googleMarker.icon.strokeOpacity - Marker.strokeOpacityDecr, 0)
         strokeWeight: 2
-        fillColor: '#FF0000'
-        fillOpacity: Math.max(@googleMarker.icon.fillOpacity - Marker.fillOpacityDecr, 0)
-        scale: 20
+        strokeColor: @color
+        strokeOpacity: Marker.initStrokeOpacity * (@lifetime - @ticks) /@lifetime
+        fillColor: @color
+        fillOpacity: Marker.initFillOpacity * Math.max(@lifetime - 1.4*@ticks, 0) / @lifetime
+        scale: @radius
       )
-      
-      if @googleMarker.icon.fillOpacity == 0 and @googleMarker.icon.strokeOpacity == 0
-        @active = false
-        return true
-      else
-        return false
 
 #
 # Start the actual map loading
 # Create the box that stores everything we need to run this map
 #
-@box = new @LiveMapBox
-@box.loadMap("map-canvas")
+window.box = new @LiveMapBox
+window.box.loadMap("map-canvas")
 
+$('#store_list').change( ->
+  window.box.store_select($('#store_list').val())
+)
 
 

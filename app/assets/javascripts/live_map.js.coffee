@@ -7,4 +7,4 @@
 window.onload = ->
   $.ajax "/live_map/load_map_js",
     type: "POST"
-
+  
